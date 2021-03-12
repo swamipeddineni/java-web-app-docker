@@ -1,0 +1,32 @@
+node('master'){
+    def mavenHome = tool name: "Maven3.6.3"
+    def buildNumber = BUILD_NUMBER
+    
+    stage("Checkout code from Git"){
+      git credentialsId: 'f2038c25-8ec5-4cfc-ac28-d57b6565cc89', 
+      url: 'https://github.com/swamipeddineni/java-web-app-docker.git'
+    }
+    
+    stage("Build code package with Maven"){
+     sh "${mavenHome}/bin/mvn clean package"    
+    }
+    
+    stage("Build Docker Image"){
+     sh "docker build -t swamipeddineni/java-web-app-docker:${buildNumber} ."
+    }
+    
+    
+    stage("Login into DockerHub and Push Image into DockerHub"){
+     withCredentials([string(credentialsId: 'DocHubPwd', variable: 'DocHubPwd')]) {
+       sh "docker login -u swamipeddineni -p ${DocHubPwd}"
+      }
+       sh "docker push swamipeddineni/java-web-app-docker:${buildNumber}"
+    }
+    
+   stage("Deploy Application as Docker Container into Docker Deployment Server"){
+    sshagent(['Docker_Dep_SSH']) {
+      sh "ssh -o StrictHostKeyChecking=no ubuntu@13.127.188.228 docker rm -f javawebappcontainer || true"
+      sh "ssh -o StrictHostKeyChecking=no ubuntu@13.127.188.228 docker run -d -p 8080:8080 --name javawebappcontainer swamipeddineni/java-web-app-docker:${buildNumber}"
+     }   
+    }
+}   
